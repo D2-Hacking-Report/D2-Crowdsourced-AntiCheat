@@ -1,37 +1,29 @@
+
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trials Crowd Report</title>
-  <!-- Tailwind Play CDN (sufficient for a small static site on GitHub Pages) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // Tailwind config: a simple dark mode toggle via class
     tailwind.config = {
       darkMode: 'class',
-      theme: {
-        extend: {
-          boxShadow: {
-            soft: '0 10px 30px rgba(0,0,0,0.08)'
-          }
-        }
-      }
+      theme: { extend: { boxShadow: { soft: '0 10px 30px rgba(0,0,0,0.08)' } } }
     };
   </script>
   <style>
-    /* Basic transition polish */
     .fade { transition: opacity 200ms ease, transform 200ms ease; }
-    .btn { @apply rounded-2xl px-3 py-2 text-sm font-medium shadow-soft; }
-    .btn-ghost { @apply bg-white text-gray-900 border border-gray-200 hover:bg-gray-50; }
-    .btn-primary { @apply bg-indigo-600 text-white hover:bg-indigo-500; }
-    .btn-danger { @apply bg-rose-600 text-white hover:bg-rose-500; }
-    .btn-success { @apply bg-emerald-600 text-white hover:bg-emerald-500; }
-    .chip { @apply inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold; }
+    .btn { border-radius: 1rem; padding: 0.5rem 0.75rem; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+    .btn-ghost { background: white; color: #111827; border: 1px solid #e5e7eb; }
+    .btn-primary { background: #4f46e5; color: white; }
+    .btn-danger { background: #e11d48; color: white; }
+    .btn-success { background: #059669; color: white; }
+    .chip { display: inline-flex; align-items: center; border-radius: 9999px; padding: 0.25rem 0.5rem; font-size: 0.75rem; font-weight: 700; }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
-  <header class="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800">
+  <header class="sticky top-0 z-40 backdrop-blur bg-white/90 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
       <div class="flex items-center gap-2">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-indigo-600">
@@ -58,20 +50,20 @@
   </header>
 
   <main class="max-w-6xl mx-auto px-4 py-6">
-    <!-- Tabs -->
     <div class="flex flex-wrap gap-2 mb-6">
       <button class="tabBtn btn btn-ghost" data-tab="submit">Submit report</button>
       <button class="tabBtn btn btn-ghost" data-tab="browse">Browse & vote</button>
       <button class="tabBtn btn btn-ghost" data-tab="mine">My votes</button>
       <button class="tabBtn btn btn-ghost" data-tab="weekly">Weekly leaderboard</button>
+      <a class="ml-auto text-sm text-indigo-600 hover:underline" href="terms.html">Terms & Privacy</a>
     </div>
 
-    <!-- Panels -->
     <section id="tab-submit" class="tabPanel hidden fade">
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-soft">
+      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
         <h2 class="text-base font-semibold mb-3">Submit a Trials Report link</h2>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Paste a <span class="font-mono">trials.report</span> player or match link. Optionally add a label for who/what this report is about (e.g., Bungie name).
-        Everyone can later vote Legit or Cheating.</p>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Paste a <span class="font-mono">trials.report</span> player or match link. Optionally add a label for who/what this report is about (e.g., Bungie name).
+        </p>
         <div class="flex flex-col sm:flex-row gap-3">
           <input id="reportUrl" type="url" placeholder="https://trials.report/guardian/… or https://trials.report/report/…" class="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2" />
           <input id="playerLabel" type="text" placeholder="Optional: Player label (e.g., BungieName#1234)" class="w-full sm:w-72 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2" />
@@ -86,7 +78,6 @@
         <input id="searchInput" type="text" placeholder="Search by label or URL…" class="w-full sm:w-96 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2" />
         <button id="refreshBrowse" class="btn btn-ghost">Refresh</button>
       </div>
-
       <div id="browseList" class="grid gap-3"></div>
       <div id="browseEmpty" class="hidden text-sm text-gray-500 mt-4">No reports yet.</div>
     </section>
@@ -108,13 +99,14 @@
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+
     // =========================
     // CONFIG — REPLACE ME
     // =========================
     const SUPABASE_URL = 'https://ygbmgwzgascfiflaefwj.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnYm1nd3pnYXNjZmlmbGFlZndqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3MTg5NDcsImV4cCI6MjA3MDI5NDk0N30.q0PxznHk83tXnaDZYbYQmlumGOk6TtPsXZG0jB0iweY';
 
-    // Create the client. PKCE flow works well on GitHub Pages.
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: true,
@@ -123,11 +115,11 @@
         autoRefreshToken: true,
       }
     });
+    // expose for quick console testing
+    window.sb = supabase;
 
-    // =========================
     // UI helpers
-    // =========================
-    const $ = (sel) => document.querySelector(sel);
+    const $  = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
     const toast = (msg, ok=true) => {
       const t = $('#toast');
@@ -137,7 +129,7 @@
       setTimeout(() => t.classList.add('opacity-0'), 2000);
     };
 
-    // Theme toggle
+    // Theme
     const themePref = localStorage.getItem('theme') || 'system';
     const applyTheme = () => {
       const isDark = themePref === 'dark' || (themePref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -200,50 +192,70 @@
       currentUser = null; await refreshProfileUI();
     });
 
-    // Listen for auth changes
     supabase.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session?.user || null;
       await refreshProfileUI();
       await Promise.all([loadBrowse(), loadMine(), loadWeekly()]);
     });
 
-    // On first load, fetch session
     const { data: sessionData } = await supabase.auth.getSession();
     currentUser = sessionData.session?.user || null;
     await refreshProfileUI();
 
-    // =========================
-    // Submit report
-    // =========================
-    function parseTrialsUrl(raw) {
+    // ===== Submit report =====
+    function normalizeTrialsUrl(raw) {
       if (!raw) return null;
+      let s = String(raw).trim();
+      if (!/^https?:\/\//i.test(s)) s = 'https://' + s; // allow bare trials.report
       try {
-        const u = new URL(raw);
+        const u = new URL(s);
         if (!u.hostname.endsWith('trials.report')) return null;
         return u.toString();
       } catch { return null; }
     }
 
     $('#submitReportBtn').addEventListener('click', async () => {
+      const help = $('#submitHelp');
+      help.textContent = '';
+
       if (!currentUser) { toast('Please sign in to submit.', false); return; }
-      const url = parseTrialsUrl($('#reportUrl').value.trim());
-      const label = $('#playerLabel').value.trim() || null;
-      if (!url) { toast('Enter a valid trials.report URL', false); return; }
-      const { error } = await supabase.from('reports').insert({
-        submitter_id: currentUser.id,
-        trials_url: url,
-        player_label: label,
-      });
-      if (error) { toast(error.message, false); return; }
-      $('#reportUrl').value = ''; $('#playerLabel').value = '';
-      toast('Report added.');
-      await loadBrowse();
-      showTab('browse');
+
+      const btn = $('#submitReportBtn');
+      const url = normalizeTrialsUrl($('#reportUrl').value);
+      const label = ($('#playerLabel').value || '').trim() || null;
+
+      if (!url) {
+        help.textContent = 'Enter a valid trials.report URL (include https://)';
+        help.className = 'mt-3 text-xs text-rose-600';
+        return;
+      }
+
+      btn.disabled = true; btn.textContent = 'Adding…';
+      try {
+        // submitter_id is set server-side by trigger
+        const { error } = await supabase.from('reports').insert({
+          trials_url: url,
+          player_label: label,
+        });
+
+        if (error) {
+          console.error('Insert error', error);
+          const msg = /unique/i.test(error.message) ? 'That link was already submitted.' : error.message;
+          help.textContent = msg; help.className = 'mt-3 text-xs text-rose-600';
+          toast('Could not add report', false);
+        } else {
+          $('#reportUrl').value = ''; $('#playerLabel').value = '';
+          help.textContent = 'Report added.'; help.className = 'mt-3 text-xs text-emerald-600';
+          toast('Report added');
+          await loadBrowse();
+          showTab('browse');
+        }
+      } finally {
+        btn.disabled = false; btn.textContent = 'Add report';
+      }
     });
 
-    // =========================
-    // Browse & vote
-    // =========================
+    // ===== Browse & vote =====
     $('#refreshBrowse').addEventListener('click', () => loadBrowse());
     $('#searchInput').addEventListener('input', () => renderBrowse(window.__reportStatsCache || []));
 
@@ -271,7 +283,11 @@
 
     async function renderBrowse(rows) {
       const q = $('#searchInput').value.trim().toLowerCase();
-      const filtered = rows.filter(r => !q || (r.player_label || '').toLowerCase().includes(q) || (r.trials_url || '').toLowerCase().includes(q));
+      const filtered = rows.filter(r =>
+        !q ||
+        (r.player_label || '').toLowerCase().includes(q) ||
+        (r.trials_url || '').toLowerCase().includes(q)
+      );
       const container = $('#browseList'); container.innerHTML = '';
       $('#browseEmpty').classList.toggle('hidden', filtered.length > 0);
       const idList = filtered.map(r => r.report_id);
@@ -304,7 +320,7 @@
         container.appendChild(el);
       }
 
-      // Attach vote handlers
+      // vote handlers
       container.querySelectorAll('button[data-vote]').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!currentUser) { toast('Sign in to vote.', false); return; }
@@ -316,16 +332,12 @@
           }, { onConflict: 'report_id,voter_id' });
           if (error) { toast(error.message, false); return; }
           toast('Vote recorded');
-          await loadBrowse();
-          await loadMine();
-          await loadWeekly();
+          await loadBrowse(); await loadMine(); await loadWeekly();
         });
       });
     }
 
-    // =========================
-    // My votes
-    // =========================
+    // ===== My votes =====
     async function loadMine() {
       if (!currentUser) { $('#mineList').innerHTML = ''; $('#mineEmpty').classList.remove('hidden'); return; }
       const { data, error } = await supabase
@@ -368,9 +380,7 @@
       }));
     }
 
-    // =========================
-    // Weekly leaderboard
-    // =========================
+    // ===== Weekly leaderboard =====
     async function loadWeekly() {
       const { data, error } = await supabase
         .from('weekly_cheater_leaderboard')
