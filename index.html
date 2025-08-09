@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -105,8 +104,10 @@
     // =========================
     const SUPABASE_URL = 'https://ygbmgwzgascfiflaefwj.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnYm1nd3pnYXNjZmlmbGFlZndqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3MTg5NDcsImV4cCI6MjA3MDI5NDk0N30.q0PxznHk83tXnaDZYbYQmlumGOk6TtPsXZG0jB0iweY';
+    // Your published GitHub Pages URL (with trailing slash)
+    const APP_URL = 'https://d2-hacking-report.github.io/D2-Crowdsourced-AntiCheat/';
 
-
+    // Client
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: true,
@@ -115,8 +116,22 @@
         autoRefreshToken: true,
       }
     });
-    // expose for quick console testing
-    window.sb = supabase;
+    window.sb = supabase; // console debugging
+
+    // --- Complete the PKCE code exchange explicitly on return ---
+    if (window.location.search.includes('code=')) {
+      try {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        if (exErr) console.error('exchangeCodeForSession error:', exErr);
+      } catch (e) {
+        console.error('exchange failed', e);
+      } finally {
+        // Clean the URL so ?code=... doesn’t stick around
+        const u = new URL(window.location);
+        u.search = '';
+        history.replaceState({}, '', u);
+      }
+    }
 
     // UI helpers
     const $  = (sel) => document.querySelector(sel);
@@ -180,26 +195,41 @@
 
     // OAuth buttons
     $('#loginTwitter').addEventListener('click', async () => {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: 'twitter', options: { redirectTo: window.location.href } });
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'twitter',
+        options: { redirectTo: APP_URL }
+      });
       if (error) toast('Login failed (X/Twitter): ' + error.message, false);
     });
     $('#loginGithub').addEventListener('click', async () => {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: window.location.href } });
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: { redirectTo: APP_URL }
+      });
       if (error) toast('Login failed (GitHub): ' + error.message, false);
     });
     $('#signOutBtn').addEventListener('click', async () => {
-      await supabase.auth.signOut();
-      currentUser = null; await refreshProfileUI();
+      try {
+        await supabase.auth.signOut();    // clear supabase session
+        localStorage.removeItem('sb-' + btoa(SUPABASE_URL) + '-auth-token'); // belt + suspenders
+      } finally {
+        currentUser = null;
+        await refreshProfileUI();
+        location.replace(APP_URL); // land back on clean root
+      }
     });
 
+    // Listen for auth changes
     supabase.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session?.user || null;
       await refreshProfileUI();
       await Promise.all([loadBrowse(), loadMine(), loadWeekly()]);
     });
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    currentUser = sessionData.session?.user || null;
+    // On first load, fetch session
+    (await supabase.auth.getSession()).data.session
+      ? currentUser = (await supabase.auth.getSession()).data.session.user
+      : currentUser = null;
     await refreshProfileUI();
 
     // ===== Submit report =====
