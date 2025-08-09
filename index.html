@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trials Crowd Report</title>
+  <!-- Tailwind Play CDN (sufficient for a small static site on GitHub Pages) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind config: a simple dark mode toggle via class
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          boxShadow: {
+            soft: '0 10px 30px rgba(0,0,0,0.08)'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Basic transition polish */
+    .fade { transition: opacity 200ms ease, transform 200ms ease; }
+    .btn { @apply rounded-2xl px-3 py-2 text-sm font-medium shadow-soft; }
+    .btn-ghost { @apply bg-white text-gray-900 border border-gray-200 hover:bg-gray-50; }
+    .btn-primary { @apply bg-indigo-600 text-white hover:bg-indigo-500; }
+    .btn-danger { @apply bg-rose-600 text-white hover:bg-rose-500; }
+    .btn-success { @apply bg-emerald-600 text-white hover:bg-emerald-500; }
+    .chip { @apply inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+  <!--
+  =============================================
+  SETUP
+  1) Create a free Supabase project. Enable OAuth providers you want (Twitter/X, GitHub recommended).
+     In each provider, add an Authorized Redirect URL pointing to your GitHub Pages domain
+     (e.g., https://<user>.github.io/<repo>/) and to http://localhost for local tests.
+  2) In Supabase SQL Editor, run the schema at the bottom of this file (inside <!-- SQL SETUP --> comment).
+  3) Replace SUPABASE_URL and SUPABASE_ANON_KEY below.
+  4) Commit this single file to a public repo and enable GitHub Pages (root folder). That's it.
+  =============================================
+  -->
+
+  <header class="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-indigo-600">
+          <path d="M12 3l3.09 6.26L22 10.27l-5 4.87L18.18 22 12 18.9 5.82 22 7 15.14l-5-4.87 6.91-1.01L12 3z"></path>
+        </svg>
+        <h1 class="text-lg font-semibold">Trials Crowd Report</h1>
+      </div>
+
+      <div class="ml-auto flex items-center gap-2">
+        <button id="themeToggle" class="btn btn-ghost hidden sm:inline-flex">Toggle theme</button>
+
+        <div id="authedArea" class="hidden items-center gap-3">
+          <span id="userName" class="text-sm text-gray-700 dark:text-gray-300"></span>
+          <img id="userAvatar" class="w-8 h-8 rounded-full border border-gray-200 dark:border-gray-700" alt="avatar" />
+          <button id="signOutBtn" class="btn btn-ghost">Sign out</button>
+        </div>
+
+        <div id="loginArea" class="flex items-center gap-2">
+          <button id="loginTwitter" class="btn btn-primary">Sign in with X</button>
+          <button id="loginGithub" class="btn btn-ghost">GitHub</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <!-- Tabs -->
+    <div class="flex flex-wrap gap-2 mb-6">
+      <button class="tabBtn btn btn-ghost" data-tab="submit">Submit report</button>
+      <button class="tabBtn btn btn-ghost" data-tab="browse">Browse & vote</button>
+      <button class="tabBtn btn btn-ghost" data-tab="mine">My votes</button>
+      <button class="tabBtn btn btn-ghost" data-tab="weekly">Weekly leaderboard</button>
+    </div>
+
+    <!-- Panels -->
+    <section id="tab-submit" class="tabPanel hidden fade">
+      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-soft">
+        <h2 class="text-base font-semibold mb-3">Submit a Trials Report link</h2>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Paste a <span class="font-mono">trials.report</span> player or match link. Optionally add a label for who/what this report is about (e.g., Bungie name).
+        Everyone can later vote Legit or Cheating.</p>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input id="reportUrl" type="url" placeholder="https://trials.report/guardian/… or https://trials.report/report/…" class="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2" />
+          <input id="playerLabel" type="text" placeholder="Optional: Player label (e.g., BungieName#1234)" class="w-full sm:w-72 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2" />
+          <button id="submitReportBtn" class="btn btn-primary">Add report</button>
+        </div>
+        <p id="submitHelp" class="mt-3 text-xs text-gray-500"></p>
+      </div>
+    </section>
+
+    <section id="tab-browse" class="tabPanel hidden fade">
+      <div class="mb-3 flex items-center gap-2">
+        <input id="searchInput" type="text" placeholder="Search by label or URL…" class="w-full sm:w-96 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2" />
+        <button id="refreshBrowse" class="btn btn-ghost">Refresh</button>
+      </div>
+
+      <div id="browseList" class="grid gap-3"></div>
+      <div id="browseEmpty" class="hidden text-sm text-gray-500 mt-4">No reports yet.</div>
+    </section>
+
+    <section id="tab-mine" class="tabPanel hidden fade">
+      <div id="mineList" class="grid gap-3"></div>
+      <div id="mineEmpty" class="hidden text-sm text-gray-500">No votes yet. Go vote on the Browse tab.</div>
+    </section>
+
+    <section id="tab-weekly" class="tabPanel hidden fade">
+      <div class="text-sm text-gray-600 dark:text-gray-400 mb-3">Top reports by net votes in the last 7 days.</div>
+      <div id="weeklyList" class="grid gap-3"></div>
+      <div id="weeklyEmpty" class="hidden text-sm text-gray-500">Nothing to show yet.</div>
+    </section>
+
+    <div id="toast" class="fixed bottom-4 inset-x-0 mx-auto w-fit px-4 py-2 rounded-xl bg-gray-900 text-white text-sm shadow-soft opacity-0 pointer-events-none"></div>
+  </main>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    // =========================
+    // CONFIG — REPLACE ME
+    // =========================
+    const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY';
+
+    // Create the client. PKCE flow works well on GitHub Pages.
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        flowType: 'pkce',
+        detectSessionInUrl: true,
+        autoRefreshToken: true,
+      }
+    });
+
+    // =========================
+    // UI helpers
+    // =========================
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const toast = (msg, ok=true) => {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.classList.remove('opacity-0');
+      t.style.background = ok ? '#111827' : '#7f1d1d';
+      setTimeout(() => t.classList.add('opacity-0'), 2000);
+    };
+
+    // Theme toggle
+    const themePref = localStorage.getItem('theme') || 'system';
+    const applyTheme = () => {
+      const isDark = themePref === 'dark' || (themePref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+    };
+    applyTheme();
+    $('#themeToggle').addEventListener('click', () => {
+      const cur = localStorage.getItem('theme') || 'system';
+      const next = cur === 'dark' ? 'light' : cur === 'light' ? 'system' : 'dark';
+      localStorage.setItem('theme', next); applyTheme();
+    });
+
+    // Tabs
+    const showTab = (name) => {
+      $$('.tabPanel').forEach(el => el.classList.add('hidden'));
+      $(`#tab-${name}`).classList.remove('hidden');
+    };
+    $$('.tabBtn').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+    showTab('browse');
+
+    // Auth state
+    let currentUser = null;
+
+    async function refreshProfileUI() {
+      if (!currentUser) {
+        $('#loginArea').classList.remove('hidden');
+        $('#authedArea').classList.add('hidden');
+        return;
+      }
+      $('#loginArea').classList.add('hidden');
+      $('#authedArea').classList.remove('hidden');
+      const n = currentUser.user_metadata?.user_name || currentUser.user_metadata?.name || currentUser.email || currentUser.id;
+      $('#userName').textContent = n;
+      const avatar = currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || 'https://api.dicebear.com/9.x/pixel-art/svg?seed=' + currentUser.id;
+      $('#userAvatar').src = avatar;
+      await upsertOwnProfile();
+    }
+
+    async function upsertOwnProfile() {
+      const u = currentUser; if (!u) return;
+      const { error } = await supabase.from('profiles').upsert({
+        id: u.id,
+        username: u.user_metadata?.user_name || u.user_metadata?.name || null,
+        avatar_url: u.user_metadata?.avatar_url || u.user_metadata?.picture || null,
+      });
+      if (error) console.warn('profile upsert error', error);
+    }
+
+    // OAuth buttons
+    $('#loginTwitter').addEventListener('click', async () => {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'twitter', options: { redirectTo: window.location.href } });
+      if (error) toast('Login failed (X/Twitter): ' + error.message, false);
+    });
+    $('#loginGithub').addEventListener('click', async () => {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: window.location.href } });
+      if (error) toast('Login failed (GitHub): ' + error.message, false);
+    });
+    $('#signOutBtn').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      currentUser = null; await refreshProfileUI();
+    });
+
+    // Listen for auth changes
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      currentUser = session?.user || null;
+      await refreshProfileUI();
+      await Promise.all([loadBrowse(), loadMine(), loadWeekly()]);
+    });
+
+    // On first load, fetch session
+    const { data: sessionData } = await supabase.auth.getSession();
+    currentUser = sessionData.session?.user || null;
+    await refreshProfileUI();
+
+    // =========================
+    // Submit report
+    // =========================
+    function parseTrialsUrl(raw) {
+      if (!raw) return null;
+      try {
+        const u = new URL(raw);
+        if (!u.hostname.endsWith('trials.report')) return null;
+        return u.toString();
+      } catch { return null; }
+    }
+
+    $('#submitReportBtn').addEventListener('click', async () => {
+      if (!currentUser) { toast('Please sign in to submit.', false); return; }
+      const url = parseTrialsUrl($('#reportUrl').value.trim());
+      const label = $('#playerLabel').value.trim() || null;
+      if (!url) { toast('Enter a valid trials.report URL', false); return; }
+      const { error } = await supabase.from('reports').insert({
+        submitter_id: currentUser.id,
+        trials_url: url,
+        player_label: label,
+      });
+      if (error) { toast(error.message, false); return; }
+      $('#reportUrl').value = ''; $('#playerLabel').value = '';
+      toast('Report added.');
+      await loadBrowse();
+      showTab('browse');
+    });
+
+    // =========================
+    // Browse & vote
+    // =========================
+    $('#refreshBrowse').addEventListener('click', () => loadBrowse());
+    $('#searchInput').addEventListener('input', () => renderBrowse(window.__reportStatsCache || []));
+
+    async function loadBrowse() {
+      const { data, error } = await supabase
+        .from('report_stats')
+        .select('*')
+        .order('net', { ascending: false })
+        .limit(200);
+      if (error) { console.warn(error); toast('Failed to load reports', false); return; }
+      window.__reportStatsCache = data || [];
+      await renderBrowse(data || []);
+    }
+
+    async function getMyVotesFor(reportIds) {
+      if (!currentUser || reportIds.length === 0) return {};
+      const { data, error } = await supabase
+        .from('votes')
+        .select('report_id, vote')
+        .eq('voter_id', currentUser.id)
+        .in('report_id', reportIds);
+      if (error) return {};
+      const map = {}; for (const v of data) map[v.report_id] = v.vote; return map;
+    }
+
+    async function renderBrowse(rows) {
+      const q = $('#searchInput').value.trim().toLowerCase();
+      const filtered = rows.filter(r => !q || (r.player_label || '').toLowerCase().includes(q) || (r.trials_url || '').toLowerCase().includes(q));
+      const container = $('#browseList'); container.innerHTML = '';
+      $('#browseEmpty').classList.toggle('hidden', filtered.length > 0);
+      const idList = filtered.map(r => r.report_id);
+      const myVotes = await getMyVotesFor(idList);
+
+      for (const r of filtered) {
+        const el = document.createElement('div');
+        el.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between';
+        const legit = Number(r.legit_votes || 0);
+        const cheat = Number(r.cheat_votes || 0);
+        const net = Number(r.net || (cheat - legit));
+        const my = myVotes[r.report_id] || null;
+        el.innerHTML = `
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <a href="${r.trials_url}" target="_blank" class="font-medium truncate hover:underline">${r.player_label || r.trials_url}</a>
+              <span class="chip bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">ID ${r.report_id}</span>
+            </div>
+            <div class="mt-1 text-xs text-gray-500">Added ${new Date(r.created_at).toLocaleString()}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="chip bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Legit ${legit}</span>
+            <span class="chip bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">Cheat ${cheat}</span>
+            <span class="chip bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">Net ${net}</span>
+            <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+            <button data-vote="legit" data-id="${r.report_id}" class="btn ${my==='legit' ? 'btn-success' : 'btn-ghost'}">Legit</button>
+            <button data-vote="cheat" data-id="${r.report_id}" class="btn ${my==='cheat' ? 'btn-danger' : 'btn-ghost'}">Cheat</button>
+          </div>
+        `;
+        container.appendChild(el);
+      }
+
+      // Attach vote handlers
+      container.querySelectorAll('button[data-vote]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!currentUser) { toast('Sign in to vote.', false); return; }
+          const vote = btn.dataset.vote; const reportId = Number(btn.dataset.id);
+          const { error } = await supabase.from('votes').upsert({
+            report_id: reportId,
+            voter_id: currentUser.id,
+            vote,
+          }, { onConflict: 'report_id,voter_id' });
+          if (error) { toast(error.message, false); return; }
+          toast('Vote recorded');
+          await loadBrowse();
+          await loadMine();
+          await loadWeekly();
+        });
+      });
+    }
+
+    // =========================
+    // My votes
+    // =========================
+    async function loadMine() {
+      if (!currentUser) { $('#mineList').innerHTML = ''; $('#mineEmpty').classList.remove('hidden'); return; }
+      const { data, error } = await supabase
+        .from('votes')
+        .select('report_id, vote, created_at, reports!inner(player_label, trials_url)')
+        .eq('voter_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) { console.warn(error); return; }
+      const container = $('#mineList'); container.innerHTML = '';
+      $('#mineEmpty').classList.toggle('hidden', (data||[]).length > 0);
+      for (const v of (data || [])) {
+        const el = document.createElement('div');
+        el.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 flex items-center justify-between';
+        el.innerHTML = `
+          <div class="min-w-0">
+            <a class="font-medium hover:underline truncate" href="${v.reports.trials_url}" target="_blank">${v.reports.player_label || v.reports.trials_url}</a>
+            <div class="text-xs text-gray-500 mt-1">Voted <b>${v.vote}</b> on ${new Date(v.created_at).toLocaleString()}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-ghost text-xs" data-change="legit" data-id="${v.report_id}">Set Legit</button>
+            <button class="btn btn-ghost text-xs" data-change="cheat" data-id="${v.report_id}">Set Cheat</button>
+            <button class="btn btn-ghost text-xs" data-remove data-id="${v.report_id}">Remove</button>
+          </div>
+        `;
+        container.appendChild(el);
+      }
+      container.querySelectorAll('button[data-change]').forEach(b => b.addEventListener('click', async () => {
+        const reportId = Number(b.dataset.id);
+        const vote = b.dataset.change;
+        const { error } = await supabase.from('votes').upsert({ report_id: reportId, voter_id: currentUser.id, vote }, { onConflict: 'report_id,voter_id' });
+        if (error) return toast(error.message, false);
+        toast('Vote updated'); await loadBrowse(); await loadMine(); await loadWeekly();
+      }));
+      container.querySelectorAll('button[data-remove]').forEach(b => b.addEventListener('click', async () => {
+        const reportId = Number(b.dataset.id);
+        const { error } = await supabase.from('votes').delete().match({ report_id: reportId, voter_id: currentUser.id });
+        if (error) return toast(error.message, false);
+        toast('Vote removed'); await loadBrowse(); await loadMine(); await loadWeekly();
+      }));
+    }
+
+    // =========================
+    // Weekly leaderboard
+    // =========================
+    async function loadWeekly() {
+      const { data, error } = await supabase
+        .from('weekly_cheater_leaderboard')
+        .select('*')
+        .order('net', { ascending: false })
+        .limit(50);
+      if (error) { console.warn(error); return; }
+      const container = $('#weeklyList'); container.innerHTML = '';
+      $('#weeklyEmpty').classList.toggle('hidden', (data||[]).length > 0);
+      for (const r of (data || [])) {
+        const el = document.createElement('div');
+        el.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 flex items-center justify-between';
+        const legit = Number(r.legit_votes || 0);
+        const cheat = Number(r.cheat_votes || 0);
+        const net = Number(r.net || (cheat - legit));
+        el.innerHTML = `
+          <div class="min-w-0">
+            <a class="font-medium hover:underline truncate" href="${r.trials_url}" target="_blank">${r.player_label || r.trials_url}</a>
+            <div class="text-xs text-gray-500 mt-1">Cheat ${cheat} • Legit ${legit} • Net ${net}</div>
+          </div>
+          <a href="${r.trials_url}" target="_blank" class="btn btn-ghost">Open</a>
+        `;
+        container.appendChild(el);
+      }
+    }
+
+    // Initial data
+    await Promise.all([loadBrowse(), loadWeekly(), loadMine()]);
+  </script>
+
+  <!--
+  ======================================================
+  SQL SETUP — Paste in Supabase SQL Editor (once)
+  ======================================================
+
+  -- Enable extensions used by Supabase (usually on by default)
+  -- create extension if not exists pgcrypto; -- not strictly required
+
+  -- 1) Public profiles of auth.users (optional but nice)
+  create table if not exists public.profiles (
+    id uuid primary key references auth.users(id) on delete cascade,
+    username text,
+    avatar_url text,
+    created_at timestamptz default now()
+  );
+  alter table public.profiles enable row level security;
+  create policy "Public read profiles" on public.profiles for select using (true);
+  create policy "Own write profiles" on public.profiles for insert with check (auth.uid() = id);
+  create policy "Own update profiles" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+
+  -- 2) Reports submitted by users
+  create table if not exists public.reports (
+    id bigint generated always as identity primary key,
+    submitter_id uuid not null references auth.users(id) on delete cascade,
+    player_label text,
+    trials_url text not null,
+    url_hash text generated always as (md5(trials_url)) stored,
+    created_at timestamptz default now(),
+    is_hidden boolean default false,
+    constraint unique_report_link unique (url_hash)
+  );
+  alter table public.reports enable row level security;
+  create policy "Public read reports" on public.reports for select using (is_hidden = false);
+  create policy "Auth insert reports" on public.reports for insert with check (auth.uid() = submitter_id);
+  create policy "Submitter can update own (e.g., label)" on public.reports for update using (auth.uid() = submitter_id) with check (auth.uid() = submitter_id);
+
+  -- 3) Votes: one per user per report; updatable by the same voter
+  create type if not exists vote_value as enum ('cheat','legit');
+  create table if not exists public.votes (
+    id bigint generated always as identity primary key,
+    report_id bigint not null references public.reports(id) on delete cascade,
+    voter_id uuid not null references auth.users(id) on delete cascade,
+    vote vote_value not null,
+    created_at timestamptz default now(),
+    constraint one_vote_per_user unique (report_id, voter_id)
+  );
+  alter table public.votes enable row level security;
+  create policy "Public read votes" on public.votes for select using (true);
+  create policy "Auth insert own vote" on public.votes for insert with check (auth.uid() = voter_id);
+  create policy "Voter update own vote" on public.votes for update using (auth.uid() = voter_id) with check (auth.uid() = voter_id);
+  create policy "Voter delete own vote" on public.votes for delete using (auth.uid() = voter_id);
+
+  -- Optional: simple rate limit (reject bursty voting). Adjust thresholds as needed.
+  create or replace function public.enforce_vote_rate_limit()
+  returns trigger as $$
+  declare recent int;
+  begin
+    select count(*) into recent from public.votes
+     where voter_id = new.voter_id and created_at > now() - interval '30 seconds';
+    if recent >= 10 then
+      raise exception 'Rate limit: too many votes in 30s. Try again later.';
+    end if;
+    return new;
+  end; $$ language plpgsql security definer;
+  drop trigger if exists trg_vote_rate_limit on public.votes;
+  create trigger trg_vote_rate_limit before insert on public.votes
+  for each row execute function public.enforce_vote_rate_limit();
+
+  -- 4) Aggregated view for browsing
+  create or replace view public.report_stats as
+  select r.id as report_id, r.trials_url, r.player_label, r.created_at,
+         coalesce(count(v.*) filter (where v.vote='legit'), 0) as legit_votes,
+         coalesce(count(v.*) filter (where v.vote='cheat'), 0) as cheat_votes,
+         (coalesce(count(v.*) filter (where v.vote='cheat'), 0)
+         -coalesce(count(v.*) filter (where v.vote='legit'), 0)) as net
+    from public.reports r
+    left join public.votes v on v.report_id = r.id
+   where r.is_hidden = false
+   group by r.id
+  ;
+  -- Views use underlying table policies; with the above public SELECT, they are readable.
+
+  -- 5) Weekly leaderboard view (last 7 days)
+  create or replace view public.weekly_cheater_leaderboard as
+  select r.id as report_id, r.trials_url, r.player_label,
+         coalesce(count(v.*) filter (where v.vote='legit' and v.created_at >= now() - interval '7 days'), 0) as legit_votes,
+         coalesce(count(v.*) filter (where v.vote='cheat' and v.created_at >= now() - interval '7 days'), 0) as cheat_votes,
+         (coalesce(count(v.*) filter (where v.vote='cheat' and v.created_at >= now() - interval '7 days'), 0)
+         -coalesce(count(v.*) filter (where v.vote='legit' and v.created_at >= now() - interval '7 days'), 0)) as net
+    from public.reports r
+    left join public.votes v on v.report_id = r.id
+   where r.is_hidden = false
+   group by r.id
+  ;
+
+  -- (Optional) row count hint for performance on large tables
+  -- analyze public.reports; analyze public.votes;
+
+  -- Done.
+  -->
+</body>
+</html>
