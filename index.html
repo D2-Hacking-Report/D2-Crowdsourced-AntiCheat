@@ -1,3 +1,5 @@
+
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -61,7 +63,7 @@
       <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
         <h2 class="text-base font-semibold mb-3">Submit a Trials Report link</h2>
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Paste a <span class="font-mono">trials.report</span> player or match link. Optionally add a label for who/what this report is about (e.g., Bungie name).
+          Paste a <span class="font-mono">trials.report</span> player or match link. Optionally add a label (e.g., Bungie name).
         </p>
         <div class="flex flex-col sm:flex-row gap-3">
           <input id="reportUrl" type="url" placeholder="https://trials.report/guardian/… or https://trials.report/report/…" class="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2" />
@@ -98,7 +100,6 @@
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-
     // =========================
     // CONFIG — REPLACE ME
     // =========================
@@ -107,7 +108,7 @@
     // Your published GitHub Pages URL (with trailing slash)
     const APP_URL = 'https://d2-hacking-report.github.io/D2-Crowdsourced-AntiCheat/';
 
-    // Client
+    // ===== Supabase client =====
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: true,
@@ -116,24 +117,21 @@
         autoRefreshToken: true,
       }
     });
-    window.sb = supabase; // console debugging
+    window.sb = supabase; // optional: console debug
 
-    // --- Complete the PKCE code exchange explicitly on return ---
+    // Complete the PKCE code exchange explicitly (GitHub Pages friendly)
     if (window.location.search.includes('code=')) {
       try {
         const { error: exErr } = await supabase.auth.exchangeCodeForSession(window.location.href);
         if (exErr) console.error('exchangeCodeForSession error:', exErr);
-      } catch (e) {
-        console.error('exchange failed', e);
       } finally {
-        // Clean the URL so ?code=... doesn’t stick around
         const u = new URL(window.location);
         u.search = '';
         history.replaceState({}, '', u);
       }
     }
 
-    // UI helpers
+    // Helpers
     const $  = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
     const toast = (msg, ok=true) => {
@@ -158,10 +156,7 @@
     });
 
     // Tabs
-    const showTab = (name) => {
-      $$('.tabPanel').forEach(el => el.classList.add('hidden'));
-      $(`#tab-${name}`).classList.remove('hidden');
-    };
+    const showTab = (name) => { $$('.tabPanel').forEach(el => el.classList.add('hidden')); $(`#tab-${name}`).classList.remove('hidden'); };
     $$('.tabBtn').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
     showTab('browse');
 
@@ -180,20 +175,27 @@
       $('#userName').textContent = n;
       const avatar = currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || 'https://api.dicebear.com/9.x/pixel-art/svg?seed=' + currentUser.id;
       $('#userAvatar').src = avatar;
-      await upsertOwnProfile();
-    }
-
-    async function upsertOwnProfile() {
-      const u = currentUser; if (!u) return;
-      const { error } = await supabase.from('profiles').upsert({
-        id: u.id,
-        username: u.user_metadata?.user_name || u.user_metadata?.name || null,
-        avatar_url: u.user_metadata?.avatar_url || u.user_metadata?.picture || null,
+      await supabase.from('profiles').upsert({
+        id: currentUser.id,
+        username: n,
+        avatar_url: avatar
       });
-      if (error) console.warn('profile upsert error', error);
     }
 
-    // OAuth buttons
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      currentUser = session?.user || null;
+      await refreshProfileUI();
+      await Promise.all([loadBrowse(), loadMine(), loadWeekly()]);
+    });
+
+    // Initial session fetch
+    {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user || null;
+      await refreshProfileUI();
+    }
+
+    // Sign in
     $('#loginTwitter').addEventListener('click', async () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'twitter',
@@ -208,35 +210,33 @@
       });
       if (error) toast('Login failed (GitHub): ' + error.message, false);
     });
+
+    // ===== Robust sign out =====
+    const PROJECT_REF = new URL(SUPABASE_URL).host.split('.')[0];                   // xyz123
+    const LS_KEY = `sb-${PROJECT_REF}-auth-token`;                                  // supabase v2 key
     $('#signOutBtn').addEventListener('click', async () => {
+      const btn = $('#signOutBtn');
+      btn.disabled = true; btn.textContent = 'Signing out…';
       try {
-        await supabase.auth.signOut();    // clear supabase session
-        localStorage.removeItem('sb-' + btoa(SUPABASE_URL) + '-auth-token'); // belt + suspenders
+        const { error } = await supabase.auth.signOut({ scope: 'local' });
+        if (error) console.warn('signOut error:', error);
       } finally {
+        try {
+          localStorage.removeItem(LS_KEY);
+          sessionStorage.removeItem(LS_KEY);
+        } catch {}
         currentUser = null;
         await refreshProfileUI();
-        location.replace(APP_URL); // land back on clean root
+        // hard navigate to a clean URL
+        location.replace(APP_URL);
       }
     });
-
-    // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      currentUser = session?.user || null;
-      await refreshProfileUI();
-      await Promise.all([loadBrowse(), loadMine(), loadWeekly()]);
-    });
-
-    // On first load, fetch session
-    (await supabase.auth.getSession()).data.session
-      ? currentUser = (await supabase.auth.getSession()).data.session.user
-      : currentUser = null;
-    await refreshProfileUI();
 
     // ===== Submit report =====
     function normalizeTrialsUrl(raw) {
       if (!raw) return null;
       let s = String(raw).trim();
-      if (!/^https?:\/\//i.test(s)) s = 'https://' + s; // allow bare trials.report
+      if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
       try {
         const u = new URL(s);
         if (!u.hostname.endsWith('trials.report')) return null;
@@ -245,29 +245,18 @@
     }
 
     $('#submitReportBtn').addEventListener('click', async () => {
-      const help = $('#submitHelp');
-      help.textContent = '';
-
+      const help = $('#submitHelp'); help.textContent = '';
       if (!currentUser) { toast('Please sign in to submit.', false); return; }
 
       const btn = $('#submitReportBtn');
       const url = normalizeTrialsUrl($('#reportUrl').value);
       const label = ($('#playerLabel').value || '').trim() || null;
 
-      if (!url) {
-        help.textContent = 'Enter a valid trials.report URL (include https://)';
-        help.className = 'mt-3 text-xs text-rose-600';
-        return;
-      }
+      if (!url) { help.textContent = 'Enter a valid trials.report URL (include https://)'; help.className = 'mt-3 text-xs text-rose-600'; return; }
 
       btn.disabled = true; btn.textContent = 'Adding…';
       try {
-        // submitter_id is set server-side by trigger
-        const { error } = await supabase.from('reports').insert({
-          trials_url: url,
-          player_label: label,
-        });
-
+        const { error } = await supabase.from('reports').insert({ trials_url: url, player_label: label });
         if (error) {
           console.error('Insert error', error);
           const msg = /unique/i.test(error.message) ? 'That link was already submitted.' : error.message;
@@ -276,13 +265,9 @@
         } else {
           $('#reportUrl').value = ''; $('#playerLabel').value = '';
           help.textContent = 'Report added.'; help.className = 'mt-3 text-xs text-emerald-600';
-          toast('Report added');
-          await loadBrowse();
-          showTab('browse');
+          toast('Report added'); await loadBrowse(); showTab('browse');
         }
-      } finally {
-        btn.disabled = false; btn.textContent = 'Add report';
-      }
+      } finally { btn.disabled = false; btn.textContent = 'Add report'; }
     });
 
     // ===== Browse & vote =====
@@ -290,34 +275,21 @@
     $('#searchInput').addEventListener('input', () => renderBrowse(window.__reportStatsCache || []));
 
     async function loadBrowse() {
-      const { data, error } = await supabase
-        .from('report_stats')
-        .select('*')
-        .order('net', { ascending: false })
-        .limit(200);
+      const { data, error } = await supabase.from('report_stats').select('*').order('net', { ascending: false }).limit(200);
       if (error) { console.warn(error); toast('Failed to load reports', false); return; }
-      window.__reportStatsCache = data || [];
-      await renderBrowse(data || []);
+      window.__reportStatsCache = data || []; await renderBrowse(data || []);
     }
 
     async function getMyVotesFor(reportIds) {
       if (!currentUser || reportIds.length === 0) return {};
-      const { data, error } = await supabase
-        .from('votes')
-        .select('report_id, vote')
-        .eq('voter_id', currentUser.id)
-        .in('report_id', reportIds);
+      const { data, error } = await supabase.from('votes').select('report_id, vote').eq('voter_id', currentUser.id).in('report_id', reportIds);
       if (error) return {};
       const map = {}; for (const v of data) map[v.report_id] = v.vote; return map;
     }
 
     async function renderBrowse(rows) {
       const q = $('#searchInput').value.trim().toLowerCase();
-      const filtered = rows.filter(r =>
-        !q ||
-        (r.player_label || '').toLowerCase().includes(q) ||
-        (r.trials_url || '').toLowerCase().includes(q)
-      );
+      const filtered = rows.filter(r => !q || (r.player_label || '').toLowerCase().includes(q) || (r.trials_url || '').toLowerCase().includes(q));
       const container = $('#browseList'); container.innerHTML = '';
       $('#browseEmpty').classList.toggle('hidden', filtered.length > 0);
       const idList = filtered.map(r => r.report_id);
@@ -350,16 +322,11 @@
         container.appendChild(el);
       }
 
-      // vote handlers
       container.querySelectorAll('button[data-vote]').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!currentUser) { toast('Sign in to vote.', false); return; }
           const vote = btn.dataset.vote; const reportId = Number(btn.dataset.id);
-          const { error } = await supabase.from('votes').upsert({
-            report_id: reportId,
-            voter_id: currentUser.id,
-            vote,
-          }, { onConflict: 'report_id,voter_id' });
+          const { error } = await supabase.from('votes').upsert({ report_id: reportId, voter_id: currentUser.id, vote }, { onConflict: 'report_id,voter_id' });
           if (error) { toast(error.message, false); return; }
           toast('Vote recorded');
           await loadBrowse(); await loadMine(); await loadWeekly();
