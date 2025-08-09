@@ -57,7 +57,7 @@
       <button class="tabBtn btn btn-ghost" data-tab="browse">Browse & vote</button>
       <button class="tabBtn btn btn-ghost" data-tab="mine">My votes</button>
       <button class="tabBtn btn btn-ghost" data-tab="weekly">Weekly leaderboard</button>
-      <a class="ml-auto text-sm text-indigo-600 hover:underline" href="terms.html">Terms & Privacy</a>
+      <a class="ml-auto text-sm text-indigo-600 hover:underline" href="Terms_Privacy.html">Terms & Privacy</a>
     </div>
 
     <section id="tab-submit" class="tabPanel hidden fade">
@@ -108,8 +108,6 @@
     // =========================
     const SUPABASE_URL = 'https://ygbmgwzgascfiflaefwj.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnYm1nd3pnYXNjZmlmbGFlZndqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3MTg5NDcsImV4cCI6MjA3MDI5NDk0N30.q0PxznHk83tXnaDZYbYQmlumGOk6TtPsXZG0jB0iweY';
-    // Your published GitHub Pages URL (with trailing slash)
-    const APP_URL = 'https://d2-hacking-report.github.io/D2-Crowdsourced-AntiCheat/';
     // Build APP_URL from the actual hosted path (fork/branch-safe). Always ends with '/'.
     const APP_URL = (() => {
       const u = new URL(window.location.href);
@@ -171,8 +169,17 @@
     });
 
     // Tabs
-    const showTab = (name) => { $$('.tabPanel').forEach(el => el.classList.add('hidden')); $(`#tab-${name}`).classList.remove('hidden'); };
-    $$('.tabBtn').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+    const showTab = (name) => {
+      $$('.tabPanel').forEach(el => el.classList.add('hidden'));
+      $(`#tab-${name}`).classList.remove('hidden');
+    };
+    $$('.tabBtn').forEach(b => b.addEventListener('click', () => {
+      const tab = b.dataset.tab;
+      showTab(tab);
+      if (tab === 'browse') loadBrowse();
+      if (tab === 'mine') loadMine();
+      if (tab === 'weekly') loadWeekly();
+    }));
     showTab('browse');
 
     // Auth state
@@ -226,17 +233,20 @@
       const btn = $('#signOutBtn');
       btn.disabled = true; btn.textContent = 'Signing out…';
       try {
-        const { error } = await supabase.auth.signOut({ scope: 'local' });
+        const { error } = await supabase.auth.signOut({ scope: 'global' });
         if (error) console.warn('signOut error:', error);
       } finally {
-        try { localStorage.removeItem(LS_KEY); sessionStorage.removeItem(LS_KEY); } catch {}
+        try {
+          localStorage.removeItem(LS_KEY);
+          sessionStorage.removeItem(LS_KEY);
+        } catch {}
         currentUser = null;
         await refreshProfileUI();
         location.replace(APP_URL);
       }
     });
 
-    // ===== Submit report (RPC with fallback) =====
+    // ===== Submit report (direct insert) =====
     function normalizeTrialsUrl(raw) {
       if (!raw) return null;
       let s = String(raw).trim();
@@ -249,25 +259,24 @@
     }
 
     async function submitReport(url, label) {
-      // Prefer RPC for dedupe/validation on server
-      const rpc = await supabase.rpc('submit_report', { p_url: url, p_label: label });
-      if (!rpc.error) return { method: 'rpc', data: rpc.data };
-      const msg = rpc.error?.message || 'RPC failed';
-      console.warn('submit_report RPC failed:', msg);
-
-      // Heuristic: If the function is missing or permission denied, try direct insert as a fallback.
-      const looksMissing = /does not exist|not found|function submit_report/i.test(msg);
-      const looksDenied  = /permission denied|rpc|execute/i.test(msg);
-
-      if (looksMissing || looksDenied) {
-        const ins = await supabase.from('reports').insert({ trials_url: url, player_label: label, submitter_id: currentUser.id }).select('id').single();
-        if (!ins.error) return { method: 'insert', data: ins.data?.id || null };
-        // Surface the real DB error
-        throw new Error('Insert failed: ' + (ins.error.message || 'unknown'));
+      // Insert and fall back to existing row on conflict so multiple reports can be added.
+      const { data, error } = await supabase
+        .from('reports')
+        .insert({ trials_url: url, player_label: label, submitter_id: currentUser.id })
+        .select('id')
+        .single();
+      if (error) {
+        if (error.code === '23505') {
+          const { data: existing } = await supabase
+            .from('reports')
+            .select('id')
+            .eq('trials_url', url)
+            .single();
+          return { method: 'existing', data: existing?.id || null };
+        }
+        throw new Error(error.message || 'Insert failed');
       }
-
-      // Otherwise, surface the original RPC error
-      throw new Error('RPC failed: ' + msg);
+      return { method: 'insert', data: data?.id || null };
     }
 
     $('#submitReportBtn').addEventListener('click', async () => {
@@ -287,7 +296,7 @@
         help.textContent = `Report added via ${res.method}${res.data ? ' (ID ' + res.data + ')' : ''}.`;
         help.className = 'mt-3 text-xs text-emerald-600';
         toast('Report added');
-        await loadBrowse();
+        await Promise.allSettled([loadBrowse(), loadMine(), loadWeekly()]);
         showTab('browse');
       } catch (e) {
         console.error('Add report error:', e);
@@ -384,22 +393,42 @@
 
     // ===== My votes =====
     async function loadMine() {
-      if (!currentUser) { $('#mineList').innerHTML = ''; $('#mineEmpty').classList.remove('hidden'); return; }
-      const { data, error } = await supabase
+      if (!currentUser) {
+        $('#mineList').innerHTML = '';
+        $('#mineEmpty').classList.remove('hidden');
+        return;
+      }
+      const { data: votes, error } = await supabase
         .from('votes')
-        .select('report_id, vote, created_at, reports!inner(player_label, trials_url)')
+        .select('report_id, vote, created_at')
         .eq('voter_id', currentUser.id)
         .order('created_at', { ascending: false })
         .limit(200);
-      if (error) { console.warn('loadMine error:', error); $('#mineList').innerHTML = ''; $('#mineEmpty').classList.remove('hidden'); return; }
-      const container = $('#mineList'); container.innerHTML = '';
-      $('#mineEmpty').classList.toggle('hidden', (data||[]).length > 0);
-      for (const v of (data || [])) {
+      if (error) {
+        console.warn('loadMine error:', error);
+        $('#mineList').innerHTML = '';
+        $('#mineEmpty').classList.remove('hidden');
+        return;
+      }
+      const reportIds = (votes || []).map(v => v.report_id);
+      let reportMap = {};
+      if (reportIds.length) {
+        const { data: rep } = await supabase
+          .from('reports')
+          .select('id, player_label, trials_url')
+          .in('id', reportIds);
+        reportMap = Object.fromEntries((rep || []).map(r => [r.id, r]));
+      }
+      const container = $('#mineList');
+      container.innerHTML = '';
+      $('#mineEmpty').classList.toggle('hidden', (votes || []).length > 0);
+      for (const v of (votes || [])) {
+        const r = reportMap[v.report_id] || {};
         const el = document.createElement('div');
         el.className = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 flex items-center justify-between';
         el.innerHTML = `
           <div class="min-w-0">
-            <a class="font-medium hover:underline truncate" href="${v.reports.trials_url}" target="_blank">${v.reports.player_label || v.reports.trials_url}</a>
+            <a class="font-medium hover:underline truncate" href="${r.trials_url || '#'}" target="_blank">${r.player_label || r.trials_url || 'Unknown report'}</a>
             <div class="text-xs text-gray-500 mt-1">Voted <b>${v.vote}</b> on ${new Date(v.created_at).toLocaleString()}</div>
           </div>
           <div class="flex items-center gap-2">
@@ -413,14 +442,19 @@
       container.querySelectorAll('button[data-change]').forEach(b => b.addEventListener('click', async () => {
         const reportId = Number(b.dataset.id);
         const vote = b.dataset.change;
-        const { error } = await supabase.from('votes').upsert({ report_id: reportId, voter_id: currentUser.id, vote }, { onConflict: 'report_id,voter_id' });
+        const { error } = await supabase
+          .from('votes')
+          .upsert({ report_id: reportId, voter_id: currentUser.id, vote }, { onConflict: 'report_id,voter_id' });
         if (error) return toast(error.message, false);
         toast('Vote updated');
         await Promise.allSettled([loadBrowse(), loadMine(), loadWeekly()]);
       }));
       container.querySelectorAll('button[data-remove]').forEach(b => b.addEventListener('click', async () => {
         const reportId = Number(b.dataset.id);
-        const { error } = await supabase.from('votes').delete().match({ report_id: reportId, voter_id: currentUser.id });
+        const { error } = await supabase
+          .from('votes')
+          .delete()
+          .match({ report_id: reportId, voter_id: currentUser.id });
         if (error) return toast(error.message, false);
         toast('Vote removed');
         await Promise.allSettled([loadBrowse(), loadMine(), loadWeekly()]);
