@@ -31,18 +31,6 @@
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
-  <!--
-  =============================================
-  SETUP
-  1) Create a free Supabase project. Enable OAuth providers you want (Twitter/X, GitHub recommended).
-     In each provider, add an Authorized Redirect URL pointing to your GitHub Pages domain
-     (e.g., https://<user>.github.io/<repo>/) and to http://localhost for local tests.
-  2) In Supabase SQL Editor, run the schema at the bottom of this file (inside <!-- SQL SETUP --> comment).
-  3) Replace SUPABASE_URL and SUPABASE_ANON_KEY below.
-  4) Commit this single file to a public repo and enable GitHub Pages (root folder). That's it.
-  =============================================
-  -->
-
   <header class="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
       <div class="flex items-center gap-2">
@@ -412,106 +400,5 @@
     // Initial data
     await Promise.all([loadBrowse(), loadWeekly(), loadMine()]);
   </script>
-
-  <!--
-  ======================================================
-  SQL SETUP — Paste in Supabase SQL Editor (once)
-  ======================================================
-
-  -- Enable extensions used by Supabase (usually on by default)
-  -- create extension if not exists pgcrypto; -- not strictly required
-
-  -- 1) Public profiles of auth.users (optional but nice)
-  create table if not exists public.profiles (
-    id uuid primary key references auth.users(id) on delete cascade,
-    username text,
-    avatar_url text,
-    created_at timestamptz default now()
-  );
-  alter table public.profiles enable row level security;
-  create policy "Public read profiles" on public.profiles for select using (true);
-  create policy "Own write profiles" on public.profiles for insert with check (auth.uid() = id);
-  create policy "Own update profiles" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
-
-  -- 2) Reports submitted by users
-  create table if not exists public.reports (
-    id bigint generated always as identity primary key,
-    submitter_id uuid not null references auth.users(id) on delete cascade,
-    player_label text,
-    trials_url text not null,
-    url_hash text generated always as (md5(trials_url)) stored,
-    created_at timestamptz default now(),
-    is_hidden boolean default false,
-    constraint unique_report_link unique (url_hash)
-  );
-  alter table public.reports enable row level security;
-  create policy "Public read reports" on public.reports for select using (is_hidden = false);
-  create policy "Auth insert reports" on public.reports for insert with check (auth.uid() = submitter_id);
-  create policy "Submitter can update own (e.g., label)" on public.reports for update using (auth.uid() = submitter_id) with check (auth.uid() = submitter_id);
-
-  -- 3) Votes: one per user per report; updatable by the same voter
-  create type if not exists vote_value as enum ('cheat','legit');
-  create table if not exists public.votes (
-    id bigint generated always as identity primary key,
-    report_id bigint not null references public.reports(id) on delete cascade,
-    voter_id uuid not null references auth.users(id) on delete cascade,
-    vote vote_value not null,
-    created_at timestamptz default now(),
-    constraint one_vote_per_user unique (report_id, voter_id)
-  );
-  alter table public.votes enable row level security;
-  create policy "Public read votes" on public.votes for select using (true);
-  create policy "Auth insert own vote" on public.votes for insert with check (auth.uid() = voter_id);
-  create policy "Voter update own vote" on public.votes for update using (auth.uid() = voter_id) with check (auth.uid() = voter_id);
-  create policy "Voter delete own vote" on public.votes for delete using (auth.uid() = voter_id);
-
-  -- Optional: simple rate limit (reject bursty voting). Adjust thresholds as needed.
-  create or replace function public.enforce_vote_rate_limit()
-  returns trigger as $$
-  declare recent int;
-  begin
-    select count(*) into recent from public.votes
-     where voter_id = new.voter_id and created_at > now() - interval '30 seconds';
-    if recent >= 10 then
-      raise exception 'Rate limit: too many votes in 30s. Try again later.';
-    end if;
-    return new;
-  end; $$ language plpgsql security definer;
-  drop trigger if exists trg_vote_rate_limit on public.votes;
-  create trigger trg_vote_rate_limit before insert on public.votes
-  for each row execute function public.enforce_vote_rate_limit();
-
-  -- 4) Aggregated view for browsing
-  create or replace view public.report_stats as
-  select r.id as report_id, r.trials_url, r.player_label, r.created_at,
-         coalesce(count(v.*) filter (where v.vote='legit'), 0) as legit_votes,
-         coalesce(count(v.*) filter (where v.vote='cheat'), 0) as cheat_votes,
-         (coalesce(count(v.*) filter (where v.vote='cheat'), 0)
-         -coalesce(count(v.*) filter (where v.vote='legit'), 0)) as net
-    from public.reports r
-    left join public.votes v on v.report_id = r.id
-   where r.is_hidden = false
-   group by r.id
-  ;
-  -- Views use underlying table policies; with the above public SELECT, they are readable.
-
-  -- 5) Weekly leaderboard view (last 7 days)
-  create or replace view public.weekly_cheater_leaderboard as
-  select r.id as report_id, r.trials_url, r.player_label,
-         coalesce(count(v.*) filter (where v.vote='legit' and v.created_at >= now() - interval '7 days'), 0) as legit_votes,
-         coalesce(count(v.*) filter (where v.vote='cheat' and v.created_at >= now() - interval '7 days'), 0) as cheat_votes,
-         (coalesce(count(v.*) filter (where v.vote='cheat' and v.created_at >= now() - interval '7 days'), 0)
-         -coalesce(count(v.*) filter (where v.vote='legit' and v.created_at >= now() - interval '7 days'), 0)) as net
-    from public.reports r
-    left join public.votes v on v.report_id = r.id
-   where r.is_hidden = false
-   group by r.id
-  ;
-
-  -- (Optional) row count hint for performance on large tables
-  -- analyze public.reports; analyze public.votes;
-
-  -- Done.
-  -->
 </body>
 </html>
