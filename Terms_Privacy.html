@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Terms of Service & Privacy Policy — D2 Crowd AntiCheat</title>
+  <meta name="robots" content="noindex,follow" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <style>
+    .prose h2 { @apply text-xl font-semibold mt-8 mb-3; }
+    .prose h3 { @apply text-lg font-semibold mt-6 mb-2; }
+    .prose p, .prose li { @apply text-sm leading-6; }
+    .card { @apply bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+  <header class="sticky top-0 z-30 backdrop-blur bg-white/80 dark:bg-gray-900/70 border-b border-gray-200 dark:border-gray-800">
+    <div class="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
+      <a href="./" class="text-sm text-indigo-600 hover:underline">← Back to site</a>
+      <h1 class="ml-auto text-base font-semibold">Terms of Service & Privacy Policy</h1>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 py-8">
+    <article class="card p-6 prose">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="!mt-0">D2 Crowd AntiCheat — Terms of Service & Privacy Policy</h2>
+          <p class="text-xs text-gray-500">Effective date: <span id="effective"></span></p>
+        </div>
+        <button id="theme" class="text-xs bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-xl">Toggle theme</button>
+      </div>
+
+      <section class="mt-4 p-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100">
+        <p class="text-sm"><strong>Plain‑English summary:</strong> we only use your account info to let you sign in and keep a record of what you submit/vote on. We don’t sell your data. We don’t share it with third parties beyond our infrastructure providers. In other words: <em>we’re not using this for anything other than logging into this website—trust me bro</em>. The legally worded details are below.</p>
+      </section>
+
+      <h3 id="about">1) About this project</h3>
+      <p>D2 Crowd AntiCheat is a community site where users submit links to Trials reports and vote on whether a profile appears legitimate or cheating. This document combines our Terms of Service (how you can use the site) and our Privacy Policy (what data we process and why).</p>
+
+      <h3 id="eligibility">2) Eligibility & account</h3>
+      <ul class="list-disc pl-6">
+        <li>You must be at least 13 years old or the minimum age required in your country.</li>
+        <li>Sign‑in is handled by an OAuth provider (e.g., X/Twitter or GitHub) through Supabase. You are responsible for your account and for any activity under it.</li>
+      </ul>
+
+      <h3 id="acceptable-use">3) Acceptable use</h3>
+      <ul class="list-disc pl-6">
+        <li>No harassment, doxxing, hate speech, or targeted abuse.</li>
+        <li>No spam or vote manipulation (e.g., multiple accounts or automated voting).</li>
+        <li>Only submit links relevant to Destiny 2 Trials and keep commentary factual.</li>
+        <li>We may hide or remove reports, votes, or accounts that violate these rules.</li>
+      </ul>
+
+      <h3 id="privacy">4) Privacy — what we collect & why</h3>
+      <p>We aim to collect the minimum necessary to run the site.</p>
+      <ul class="list-disc pl-6">
+        <li><strong>Auth data from your provider:</strong> a unique user ID, email address (when the provider supplies it), display name/username, and avatar URL. <em>Purpose:</em> authentication, preventing duplicate votes, and showing your own voting history.</li>
+        <li><strong>Content you submit:</strong> report links, optional labels, and your votes. <em>Purpose:</em> to display them publicly to other users, compute weekly tallies, and deter spam (e.g., rate‑limiting based on your user ID).</li>
+        <li><strong>Basic logs:</strong> standard server logs and security logs from our platform providers (e.g., Supabase). <em>Purpose:</em> abuse prevention and debugging.</li>
+      </ul>
+      <p><strong>We do not sell your data.</strong> We do not share personal data with third parties except our processors that provide hosting/auth/database (e.g., Supabase and GitHub Pages) and only to operate the site.</p>
+
+      <h3 id="legal-basis">5) Legal basis (if applicable)</h3>
+      <p>If your jurisdiction requires it, our legal basis for processing is your consent (when you choose to sign in) and our legitimate interest in providing a community voting site and preventing abuse.</p>
+
+      <h3 id="retention">6) Data retention</h3>
+      <ul class="list-disc pl-6">
+        <li>Auth profile (ID, email, display name, avatar): kept while your account exists.</li>
+        <li>Reports and votes: stored until you delete your vote/report or we remove them as part of moderation.</li>
+        <li>Logs: typically retained for a short operational period (e.g., 30–90 days) by our providers.</li>
+      </ul>
+
+      <h3 id="your-rights">7) Your choices & rights</h3>
+      <ul class="list-disc pl-6">
+        <li>You can view or change your votes from the “My votes” tab.</li>
+        <li>You can request deletion of your account/profile data—see contact below. Deleting your account may anonymize or remove associated votes as allowed by platform constraints.</li>
+        <li>You can choose a different provider (e.g., GitHub) if one provider doesn’t share an email address.</li>
+      </ul>
+
+      <h3 id="cookies">8) Cookies & local storage</h3>
+      <p>We use Supabase’s browser session (local storage) so you stay signed in. We do not use third‑party advertising cookies.</p>
+
+      <h3 id="security">9) Security</h3>
+      <p>We use reasonable technical safeguards and rely on reputable infrastructure providers. No system is perfectly secure; please report issues promptly.</p>
+
+      <h3 id="moderation">10) Moderation</h3>
+      <p>We may remove content or restrict accounts at our discretion for rule violations, suspected manipulation, or legal requests. We may also hide links temporarily while investigating abuse.</p>
+
+      <h3 id="disclaimers">11) Disclaimers</h3>
+      <ul class="list-disc pl-6">
+        <li>This site is a community‑driven tool and is not affiliated with Bungie, Twitter/X, GitHub, or Supabase.</li>
+        <li>Content reflects user opinions. We do not guarantee accuracy of reports or votes.</li>
+        <li>Provided “as‑is” without warranties. Use at your own risk.</li>
+      </ul>
+
+      <h3 id="liability">12) Limitation of liability</h3>
+      <p>To the fullest extent permitted by law, we are not liable for indirect, incidental, special, consequential, or punitive damages, or any loss of data, opportunities, or reputation arising from use of this site.</p>
+
+      <h3 id="changes">13) Changes to this page</h3>
+      <p>We may update this combined Terms & Privacy page from time to time. We’ll update the effective date above and, for significant changes, may post a notice on the site.</p>
+
+      <h3 id="contact">14) Contact</h3>
+      <p>Questions or requests (including data deletion)? Email <a class="text-indigo-600" href="mailto:you@example.com">you@example.com</a>.</p>
+
+      <hr class="my-6 border-gray-200 dark:border-gray-800" />
+      <p class="text-xs text-gray-500">This page is a lightweight template and does not constitute legal advice.</p>
+    </article>
+  </main>
+
+  <script>
+    const saved = localStorage.getItem('theme') || 'system';
+    const apply = () => {
+      const isDark = saved === 'dark' || (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+    };
+    apply();
+    document.getElementById('theme').addEventListener('click', () => {
+      const cur = localStorage.getItem('theme') || 'system';
+      const next = cur === 'dark' ? 'light' : cur === 'light' ? 'system' : 'dark';
+      localStorage.setItem('theme', next); location.reload();
+    });
+    document.getElementById('effective').textContent = new Date().toISOString().slice(0,10);
+  </script>
+</body>
+</html>
